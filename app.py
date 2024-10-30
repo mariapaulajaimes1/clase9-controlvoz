@@ -5,43 +5,42 @@ from bokeh.models import CustomJS
 from streamlit_bokeh_events import streamlit_bokeh_events
 from PIL import Image
 import time
-import glob
 import paho.mqtt.client as paho
 import json
 from gtts import gTTS
 from googletrans import Translator
 
-def on_publish(client,userdata,result):             #create function for callback
-    print("el dato ha sido publicado \n")
+# Variables iniciales
+message_received = ""
+broker = "broker.mqttdashboard.com"
+port = 1883
+client1 = paho.Client("mariapaulajaimesr")
+
+# Funciones de MQTT
+def on_publish(client, userdata, result):  
+    st.success("✅ Dato publicado con éxito")
     pass
 
 def on_message(client, userdata, message):
     global message_received
     time.sleep(2)
-    message_received=str(message.payload.decode("utf-8"))
-    st.write(message_received)
+    message_received = str(message.payload.decode("utf-8"))
+    st.write(f"📩 Mensaje recibido: {message_received}")
 
-broker="broker.mqttdashboard.com"
-port=1883
-client1= paho.Client("mariapaulajaimesr")
 client1.on_message = on_message
 
+# Configuración de la interfaz
+st.set_page_config(page_title="Control por Voz MQTT", page_icon="🎤")
+st.title("🎤 Control por Voz MQTT")
 
-
-st.title("Interfaces Multimodales")
-st.subheader("CONTROL POR VOZ")
-
+# Imágenes y subtítulos
+st.subheader("Usa tu voz para controlar dispositivos")
 image = Image.open('voice_ctrl.jpg')
-
 st.image(image, width=200)
+st.write("Pulsa el botón y habla")
 
-
-
-
-st.write("Toca el Botón y habla ")
-
-stt_button = Button(label=" Inicio ", width=200)
-
+# Botón de inicio de reconocimiento de voz
+stt_button = Button(label="Iniciar Reconocimiento de Voz", width=200)
 stt_button.js_on_event("button_click", CustomJS(code="""
     var recognition = new webkitSpeechRecognition();
     recognition.continuous = true;
@@ -54,7 +53,7 @@ stt_button.js_on_event("button_click", CustomJS(code="""
                 value += e.results[i][0].transcript;
             }
         }
-        if ( value != "") {
+        if (value != "") {
             document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
         }
     }
@@ -69,16 +68,28 @@ result = streamlit_bokeh_events(
     override_height=75,
     debounce_time=0)
 
-if result:
-    if "GET_TEXT" in result:
-        st.write(result.get("GET_TEXT"))
-        client1.on_publish = on_publish                            
-        client1.connect(broker,port)  
-        message =json.dumps({"Act1":result.get("GET_TEXT").strip()})
-        ret= client1.publish("controlvoz", message)
+# Procesar resultado de voz
+if result and "GET_TEXT" in result:
+    st.write(f"🔊 Comando de voz recibido: {result.get('GET_TEXT')}")
+    client1.on_publish = on_publish  
+    client1.connect(broker, port)
+    message = json.dumps({"Act1": result.get("GET_TEXT").strip()})
+    client1.publish("controlvoz", message)
 
-    
-    try:
-        os.mkdir("temp")
-    except:
-        pass
+    # Confirmación visual
+    st.success("🚀 Comando enviado con éxito")
+
+# Sección de ayuda y mensajes recibidos
+st.sidebar.header("ℹ️ Ayuda y Estado")
+st.sidebar.write("Usa comandos de voz para controlar dispositivos conectados por MQTT.")
+st.sidebar.write("Ejemplos de comandos: 'Encender luz', 'Apagar luz'.")
+if message_received:
+    st.sidebar.write(f"📬 Último mensaje recibido: {message_received}")
+else:
+    st.sidebar.write("Esperando mensajes...")
+
+# Crear directorio temporal si no existe
+try:
+    os.mkdir("temp")
+except FileExistsError:
+    pass
